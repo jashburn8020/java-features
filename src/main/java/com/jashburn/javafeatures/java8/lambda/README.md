@@ -97,7 +97,214 @@ BinaryOperator<Long> addLongs = (x, y) -> x + y;
 
 ## Streams
 
+- Allow us to write collections-processing code at a higher level of abstraction
+- A tool for building up complex operations on collections using a functional approach
+
+### `for` Loop and External Iteration
+
+```java
+int count = 0;
+for (Artist artist : allArtists) {
+    if (artist.isFrom("London")) {
+        count++;
+    }
+}
+```
+
+- `for` loop is syntactic sugar that wraps up and hides the iteration
+
+```java
+int count = 0;
+Iterator<Artist> iterator = allArtists.iterator();
+while (iterator.hasNext()) {
+    Artist artist = iterator.next();
+    if (artist.isFrom("London")) {
+        count++;
+    }
+}
+```
+
+- Problems with these approaches:
+  - a lot of boilerplate code
+  - hard to abstract away the different behavioural operations
+  - hard to write a parallel version
+  - doesn't fluently convey the intent of the programmer
+    - must read though the body of the loop to understand it
+    - a burden with a large code base full of them, especially with nested loops
+    - conflates what you are doing with how you are doing it
+
+### Internal Iteration with `Stream`
+
+```java
+long count = allArtists.stream()
+    .filter(artist -> artist.isFrom("London"))
+    .count();
+
+```
+
+- 2 simpler operations:
+  - finding all the artists from London
+    - `filter` the `Stream` - keep only objects that pass a test
+    - functional programming - we aren't changing the contents of the `Collection`; we’re just declaring what the contents of the `Stream` will be
+  - counting a list of artists
+    - `count` how many objects are in a given `Stream`
+- The `Stream` object returned isn't a new collection
+  - it's a recipe for creating a new collection
+  - call to `filter` builds up a `Stream` recipe, but there's nothing to force this recipe to be used
+- **Lazy** method
+  - methods such as `filter` that build up the `Stream` recipe but don't force a new value to be generated at the end
+  - returns a `Stream`
+  - not executed until an _eager_ method (terminal step) is called
+- **Eager** method
+  - methods such as `count` that generate a final value out of the `Stream` sequence
+  - returns another value or is `void`
+- The preferred way of using these methods is to form a sequence of lazy operations chained together, and then to have a single eager operation at the end that generates your result
+  - we can string together lots of different operations over our collection and iterate over the collection only once
+- **Bun** methods
+  - the opening call to `stream` and the closing call to a `count` or other terminal method
+  - they aren't the actual filling of our stream burger, but they help us see where the operations begin and end
+- See: [java.util.stream](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/stream/package-summary.html)
+
+### Concepts
+
+- **Intermediate and terminal operations**
+  - a stream _pipeline_ consists of
+    - a source (such as a `Collection`, an array, a generator function, or an I/O channel);
+    - followed by zero or more _intermediate_ operations such as `Stream.filter` or `Stream.map`;
+    - and a _terminal_ operation such as `Stream.forEach` or `Stream.reduce`
+  - intermediate operations
+    - are always _lazy_
+    - execution does not actually perform anything, but instead creates a new stream
+    - divided into stateless and stateful operations
+    - _stateless_ operations such as `filter` and `map`
+      - retain no state from previously seen element when processing a new element
+      - each element can be processed independently of operations on other elements
+      - pipelines containing exclusively stateless operations can be processed in a single pass - sequential or parallel - with minimal data buffering
+    - _stateful_ operations, such as `distinct` and `sorted`
+      - may incorporate state from previously seen elements when processing new elements
+      - may need to process the entire input before producing a result
+      - under parallel computation, some pipelines containing stateful operations may require multiple passes on the data or may need to buffer significant data
+  - traversal of the pipeline source does not begin until the terminal operation of the pipeline is executed
+  - terminal operations
+    - are _eager_ in most cases, completing their traversal of the data source and processing of the pipeline before returning
+      - except `iterator()` and `spliterator()`
+        - provided as an "escape hatch" to enable arbitrary client-controlled pipeline traversal
+- **Non-interference**
+  - streams enable execution of possibly-parallel aggregate operations over data sources, including even non-thread-safe collections such as `ArrayList`
+  - possible only if we can prevent _interference_ (modifying the data source) with the data source during the execution of a stream pipeline
+    - begins when the terminal operation is invoked (except for the escape-hatch operations)
+  - exception - streams whose sources are concurrent collections
+  - interference can cause exceptions, incorrect answers, or non-conformant behaviour
+- **Reduction operation** (also called a _fold_)
+  - takes a sequence of input elements and combines them into a single summary result by repeated application of a combining operation, such as finding the sum or maximum of a set of numbers, or accumulating elements into a list
+  - general reduction operations: `reduce()`, `collect()`
+  - specialised reduction forms: `sum()`, `max()`, `count()`
+  - a properly constructed reduce operation is inherently parallelisable, so long as the function(s) used to process the elements are associative and stateless
+- **Mutable reduction operation**
+  - accumulates input elements into a mutable result container, such as a `Collection` or `StringBuilder`, as it processes the elements in the stream
+  - e.g., concatenating a stream of strings can be achieved with ordinary reduction: `strings.reduce("", String::concat)`
+    - poor performance due to the large amount of string copying
+    - better performance by accumulating the results into a `StringBuilder`
+- **Associativity**
+  - condition that a group of quantities connected by operators gives the same result whatever their grouping
+    - i.e. in whichever order the operations are performed, as long as the order of the quantities remains the same
+    - e.g. `( a × b ) × c = a × ( b × c )`
+  - importance to parallel evaluation, e.g., with `a op b op c op d == (a op b) op (c op d)`
+    - we can evaluate `(a op b)` in parallel with `(c op d)`, and then invoke `op` on the results
+  - examples of associative operations: numeric addition, min, and max, and string concatenation
+
+### Common Stream Operations
+
+- For each of the examples below, see [`CommonStreamOperations.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/CommonStreamOperations.java)
+
+#### `collect(Collectors.toList())`
+
+- an eager operation that generates a list from the values in a `Stream`
+- `collect()`
+  - a terminal operation
+  - performs a mutable reduction operation on the elements of this stream using a `Collector`
+- `Collectors.toList()`: returns a `Collector` that accumulates the input elements into a new `List`
+- see `collectToList()`
+
+#### `map`
+
+- an intermediate operation
+- applies a function (that converts a value of one type into another) to a stream of values, producing another stream of the new values
+- see `mapStringToInteger()`
+
+#### `filter`
+
+- an intermediate operation
+- retains some elements of the `Stream`, while throwing others out
+  - elements that match the given (non-interfering, stateless) predicate
+- the presence of an `if` statement in the middle of a `for` loop is an indicator that you can use a `filter`
+- see `filterStringStartsWithDigit()`
+
+#### `flatMap`
+
+- an intermediate operation
+- replaces a value with a `Stream` and concatenates all the streams together
+- its associated functional interface is the same as `map`'s - the `Function` - but its return type is restricted to streams and not any value
+- see `flatMapConcatListsToList()`
+
+#### `max` and `min`
+
+- terminal operations
+- special cases of reduction
+- return maximum and minimum element of the stream according to the provided `Comparator`
+  - the `Comparator` is non-interfering and stateless
+  - the return value is an `Optional`, which can be empty if the stream is empty
+- see `findShortestAndLongestTrack()`
+
+#### `reduce`
+
+- a terminal operation
+- to generate a single result from a collection of values
+- `count`, `min`, and `max` are forms of reduction
+- example `reduce` operation: adding up streams of numbers
+  - `int count = Stream.of(1, 2, 3).reduce(0, (acc, element) -> acc + element);`
+  - start with a count of 0 (the count of an empty `Stream`)
+    - fold together each element with an accumulator (`acc`)
+      - add the element to the accumulator at every step
+  - _identity_ value: `0`
+    - an identity for the accumulator function
+    - for all `t`, `accumulator.apply(identity, t)` is equal to `t`
+  - _accumulator_ function:
+    - must be an associative function
+    - holds the current sum (partial result of the reduction)
+    - passed in the current element in the `Stream`
+- equivalent imperative version:
+
+```java
+int acc = 0;
+for (Integer element : asList(1, 2, 3)) {
+    acc = acc + element;
+}
+```
+
+- See:
+  - `reduceAccumulator()`
+  - `reduceParallelAccumulatorCombiner()`
+
+### Putting Operations Together
+
+- Problem: for a given album, to find the nationality of every band playing on that album
+  - the artists who play each track can be solo artists or they can be in a band
+  - pretend that a band is really an artist whose name begins with 'The'
+  - see [`PuttingOperationsTogether.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/PuttingOperationsTogether.java)
+
+### Higher-Order Functions
+
+- A function that either takes another function as an argument or returns a function as its result
+- Examples:
+  - `map`: its `mapper` argument is a function
+  - `comparing`:
+    - takes another function in order to extract an index value
+    - returns a new `Comparator`
+      - has only a single abstract method, so it's a functional interface
+
 ## Sources
 
 - Warburton, Richard. Java 8 Lambdas. 1st ed., O’Reilly Media, Inc., 2014.
 - "RichardWarburton/java-8-lambdas-exercises." <https://github.com/RichardWarburton/java-8-lambdas-exercises>.
+- "java.util.stream (Java SE 11 & JDK 11)." <https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/stream/package-summary.html>.
