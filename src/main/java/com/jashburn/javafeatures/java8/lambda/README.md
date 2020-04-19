@@ -63,11 +63,11 @@ BinaryOperator<Long> addExplicit = (Long x, Long y) -> x + y;
 | `BinaryOperator<T>` | `(T, T)`  | `T`       | Multiplying two numbers (`*`)        |
 
 - See:
-  - [`PredicateDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/PredicateDemo.java)
-  - [`ConsumerDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/ConsumerDemo.java)
-  - [`FunctionDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/FunctionDemo.java)
-  - [`SupplierDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/SupplierDemo.java)
-  - [`UnaryBinaryOperatorDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/UnaryBinaryOperatorDemo.java)
+  - [`lambda/PredicateDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/PredicateDemo.java)
+  - [`lambda/ConsumerDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/ConsumerDemo.java)
+  - [`lambda/FunctionDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/FunctionDemo.java)
+  - [`lambda/SupplierDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/SupplierDemo.java)
+  - [`lambda/UnaryBinaryOperatorDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambda/UnaryBinaryOperatorDemo.java)
 
 ### Type Inference
 
@@ -163,7 +163,7 @@ long count = allArtists.stream()
 - **Bun** methods
   - the opening call to `stream` and the closing call to a `count` or other terminal method
   - they aren't the actual filling of our stream burger, but they help us see where the operations begin and end
-- See: [java.util.stream](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/stream/package-summary.html)
+- See: [`java.util.stream`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/stream/package-summary.html)
 
 ### Concepts
 
@@ -215,7 +215,7 @@ long count = allArtists.stream()
 
 ### Common Stream Operations
 
-- For each of the examples below, see [`CommonStreamOperations.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/CommonStreamOperations.java)
+- For each of the examples below, see [`streams/CommonStreamOperations.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/CommonStreamOperations.java)
 
 #### `collect(Collectors.toList())`
 
@@ -291,7 +291,7 @@ for (Integer element : asList(1, 2, 3)) {
 - Problem: for a given album, to find the nationality of every band playing on that album
   - the artists who play each track can be solo artists or they can be in a band
   - pretend that a band is really an artist whose name begins with 'The'
-  - see [`PuttingOperationsTogether.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/PuttingOperationsTogether.java)
+  - see [`streams/PuttingOperationsTogether.java`](/src/test/java/com/jashburn/javafeatures/java8/streams/PuttingOperationsTogether.java)
 
 ### Higher-Order Functions
 
@@ -302,6 +302,102 @@ for (Integer element : asList(1, 2, 3)) {
     - takes another function in order to extract an index value
     - returns a new `Comparator`
       - has only a single abstract method, so it's a functional interface
+
+## Libraries
+
+### Primitives
+
+- Boxed types of primitives are objects
+  - have memory overhead
+  - in the worst case, an `Integer[]` may take up nearly six times more memory than an `int[]` of the same size
+  - also computational overhead when converting from a primitive type to a boxed type (boxing), and vice versa (unboxing)
+- The streams library differentiates between the primitive and boxed versions of some library functions
+  - `int`, `long` and `double` have primitive specialisation implementation
+  - naming convention
+    - prefix with `To` and the primitive type
+      - return type is a primitive
+      - e.g., `ToLongFunction<T>`: `applyAsLong(T)` returns `long`
+    - name prefix is just the type name
+      - argument type is a primitive
+      - e.g., `LongFunction<R>`: `apply(long)` returns `R`
+    - suffixed with `To` and the primitive type
+      - higher-order function uses a primitive type
+      - e.g., `Stream<T>`: `mapToLong(ToLongFunction<? super T>)` returns `LongStream`
+  - specialised version of `Stream` that prefix the type name
+    - e.g., `LongStream`
+    - `map` implementation is also specialised
+      - e.g., `map​(LongUnaryOperator)` returns `LongStream`
+        - `LongUnaryOperator`: `applyAsLong(long)` returns `long`
+  - get back from a primitive stream to a boxed stream
+    - e.g., `DoubleStream`: `mapToObj​(DoubleFunction<? extends U>)` returns `Stream<U>`
+    - e.g., `DoubleStream`: `boxed()` returns `Stream<Double>`
+- Use primitive specialised functions wherever possible
+  - performance benefits
+  - additional functionality
+  - better convey intent of numerical operations
+- See [`libraries/PrimitiveSpecialisation.java`](/src/test/java/com/jashburn/javafeatures/java8/libraries/PrimitiveSpecialisation.java)
+
+### Overload Resolution
+
+- The parameter types of a lambda are inferred from the target type, and the inference follows these rules:
+  - if there is a single possible target type, the lambda expression infers the type from the corresponding argument on the functional interface
+  - if there are several possible target types, the most specific type is inferred
+  - if there are several possible target types and there is no most specific type, you must manually provide (cast) a type
+
+### `@FunctionalInterface`
+
+- Applied to any interface that is intended to be used as a functional interface
+  - there to bundle up blocks of code as data
+- There are some interfaces that have only a single method but aren't normally meant to be implemented by lambda expressions
+  - might assume that the object has internal state and be interfaces with a single method only coincidentally
+  - e.g., `java.lang.Comparable`
+    - imposes a total ordering on the objects of each class that implements it
+      - as opposed to `java.util.Comparator`, a comparison function, which imposes a total ordering on some collection of objects
+    - you don't normally think about functions themselves as being comparable objects because they lack fields and state
+      - if there are no fields and no state, what is there to sensibly compare?
+  - e.g., `java.io.Closeable`
+    - a source or destination of data that can be closed
+    - must hold an open resource, such as a file handle that needs to be closed at some point in time
+    - the interface cannot be a pure function because closing a resource is really another example of mutating state
+
+### Default Methods
+
+- Default methods can be used on any interface, functional or not
+  - `stream` method on `Collection`
+  - `forEach` method on `Iterable`
+- Interfaces don't have instance fields, so default methods can modify their child classes only by calling methods on them
+- Have slightly different inheritance rules to regular methods
+  - a virtual method
+    - opposite of a static method
+    - whenever it comes up against competition from a class (concrete) method, the logic for determining which override to pick always chooses the class
+  - see [`libraries/InheritanceRules.java`](/src/test/java/com/jashburn/javafeatures/java8/libraries/InheritanceRules.java)
+- It is possible to implement two interfaces, both provide `default` methods with the same signature
+  - results in compile error
+  - requires the concrete class to override the `default` method
+  - use enhanced `super` syntax (`InterfaceName.super.method()`) to pick preferred implementation
+  - see [`libraries/MultipleInheritance.java`](/src/test/java/com/jashburn/javafeatures/java8/libraries/MultipleInheritance.java)
+- Three rules for `default` methods inheritance behaviour:
+  1. class wins over interface
+  2. subtype wins over supertype
+  3. if previous two rules don't give us an answer, implement the method or declare it `abstract`
+
+### Optional
+
+- Designed to provide a better alternative to `null`
+- `null` is often used to represent the absence of a value - the use case `Optional` is replacing
+- Goals of `Optional`:
+  - encourages the coder to check whether a variable is `null` in order to avoid `NullPointerException`
+  - documents values that are expected to be absent in a class's API
+- Usage:
+  - `empty()`: returns an empty `Optional` instance
+    - `isPresent()` returns `false`
+  - `of(value)`: returns an `Optional` describing the given non-`null` value
+    - `isPresent()` returns `true`
+  - `get()`: if a value is present, returns the value, otherwise throws `NoSuchElementException`
+  - `ofNullable(value)`: returns an `Optional` describing the given value, if non-`null`, otherwise returns an empty `Optional`
+  - `orElse(other)`: if a value is present, returns the value, otherwise returns `other`
+  - `orElseGet(supplier)`: if a value is present, returns the value, otherwise returns the result produced by the supplying function
+- See: [`libraries/OptionalDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/libraries/OptionalDemo.java)
 
 ## Sources
 
