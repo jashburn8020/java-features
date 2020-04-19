@@ -2,12 +2,9 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "cSpell.ignoreWords": [
         "bakai",
-        "closeable",
-        "defaultmethods",
         "javac",
         "nums",
         "println",
-        "spliterator",
-        "unboxing"
+        "spliterator"
     ]
 }
