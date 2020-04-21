@@ -67,4 +67,22 @@ public final class Artist {
         List<Artist> members = getMembers().map(Artist::copy).collect(toList());
         return new Artist(name, members, nationality);
     }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(members, name, nationality);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Artist other = (Artist) obj;
+        return Objects.equals(members, other.members) && Objects.equals(name, other.name)
+                && Objects.equals(nationality, other.nationality);
+    }
 }

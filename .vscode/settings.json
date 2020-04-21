@@ -1,12 +1,14 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
     "cSpell.ignoreWords": [
+        "advancedcollections",
         "bakai",
         "closeable",
         "defaultmethods",
         "javac",
         "nums",
         "println",
+        "ringo",
         "spliterator",
         "unboxing"
     ]

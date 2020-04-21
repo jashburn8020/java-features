@@ -399,6 +399,83 @@ for (Integer element : asList(1, 2, 3)) {
   - `orElseGet(supplier)`: if a value is present, returns the value, otherwise returns the result produced by the supplying function
 - See: [`libraries/OptionalDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/libraries/OptionalDemo.java)
 
+## Advanced Collections and Collectors
+
+### Method References
+
+- Standard form: `ClassName::methodName`
+  - lambda: `artist -> artist.getName()`
+  - method references: `Artist::getName`
+- Not actually calling the method
+  - providing the equivalent of a lambda expression that can be called in order to call the method
+- Call constructors:
+  - lambda: `(name, nationality) -> new Artist(name, nationality)`
+  - method references: `Artist::new`
+- Create arrays: `String[]::new`
+
+### Element Ordering
+
+- When you create a `Stream` from a collection with a defined order (e.g., `List`), the `Stream` has a defined _encounter order_
+- Operations on data may create an encounter order where there wasn't one to begin with, e.g., using `sorted()`
+- Encounter order is propagated across intermediate operations if it exists
+- See [`advancedcollections/ElementOrdering.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/ElementOrdering.java)
+
+### Enter the Collector
+
+- `Collector`: a general-purpose construct for producing complex values from streams
+
+#### Into Other Collections
+
+- Some collectors just build up other collections: `Collectors.toList()`, `toSet()`
+- To `collect` your values into a `Collection` of a specific type: `Collectors.toCollection(Supplier)`
+  - e.g., `stream.collect(toCollection(TreeSet::new))`
+
+#### To Values
+
+- Collect into a single value using a collector
+  - according to some ordering
+    - e.g., `Collectors.maxBy(Comparator)`, `minBy(Comparator)`
+  - implement some numerical operation
+    - e.g., `Collectors.averagingInt(ToIntFunction)`, `summingInt(ToIntFunction)`, `summarizingInt(ToIntFunction)`
+  - See: [`advancedcollections/CollectToValue.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/CollectToValue.java)
+
+#### Partitioning and Grouping the Data
+
+- `Collectors.partitioningBy` takes a stream and partitions its contents into two groups
+  - uses a `Predicate` to determine whether an element should be part of the `true` group or the `false` group
+  - `collect` using this `Collector` returns a `Map` from `Boolean` to a `List` of values
+- `Collectors.groupingBy` takes a stream and groups its contents into groups according to a classification function
+  - uses a `Function` to determine the grouping into which data is added
+  - `collect` using this `Collector` returns a `Map` from a grouping type to a `List` of values
+- See [`advancedcollections/CollectToPartition.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/CollectToPartition.java)
+
+#### Strings
+
+- `Collectors.joining` for building up strings from streams in encounter order
+  - delimiter (which goes between elements)
+  - a prefix for the result
+  - a suffix for the result
+- See: [`advancedcollections/JoiningStrings.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/JoiningStrings.java)
+
+#### Composing Collectors
+
+- Compose collectors using downstream collectors, e.g., with `Collectors.groupingBy(Function, Collector)`
+- Downstream collectors can be:
+  - `Collectors.counting()`
+  - `Collectors.mapping(Function, Collector)`
+    - which in turn accepts a further downstream collector such as `Collectors.toList()`
+- See: [`advancedcollections/ComposingCollectors.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/ComposingCollectors.java)
+
+### Collection Niceties
+
+- `Map.computeIfAbsent(K, Function)`
+  - if the specified key (`K`) is not already associated with a value (or is mapped to null), compute its value using the given mapping function, and enter it into this map unless the computed value is null
+- `Map.merge(K, V, BiFunction)`
+  - if the specified key is not already associated with a value or is associated with null, associate it with the given non-null value
+  - otherwise, replace the associated value with the results of the given remapping function, or remove if the result is null
+  - this method may be of use when combining multiple mapped values for a key
+- See [`advancedcollections/CollectionNiceties.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/CollectionNiceties.java)
+
 ## Sources
 
 - Warburton, Richard. Java 8 Lambdas. 1st ed., O’Reilly Media, Inc., 2014.
