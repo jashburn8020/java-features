@@ -2,6 +2,50 @@
 
 (Based mainly on 'Java 8 Lambdas' by Richard Warburton)
 
+- [Java 8 (Lambda)](#java-8-lambda)
+  - [Lambda Expressions](#lambda-expressions)
+    - [Different Ways of Writing Lambda Expressions](#different-ways-of-writing-lambda-expressions)
+    - [Using Values](#using-values)
+    - [Functional Interfaces](#functional-interfaces)
+    - [Type Inference](#type-inference)
+  - [Streams](#streams)
+    - [`for` Loop and External Iteration](#for-loop-and-external-iteration)
+    - [Internal Iteration with `Stream`](#internal-iteration-with-stream)
+    - [Concepts](#concepts)
+    - [Common Stream Operations](#common-stream-operations)
+      - [`collect(Collectors.toList())`](#collectcollectorstolist)
+      - [`map`](#map)
+      - [`filter`](#filter)
+      - [`flatMap`](#flatmap)
+      - [`max` and `min`](#max-and-min)
+      - [`reduce`](#reduce)
+    - [Putting Operations Together](#putting-operations-together)
+    - [Higher-Order Functions](#higher-order-functions)
+  - [Libraries](#libraries)
+    - [Primitives](#primitives)
+    - [Overload Resolution](#overload-resolution)
+    - [`@FunctionalInterface`](#functionalinterface)
+    - [Default Methods](#default-methods)
+    - [Optional](#optional)
+  - [Advanced Collections and Collectors](#advanced-collections-and-collectors)
+    - [Method References](#method-references)
+    - [Element Ordering](#element-ordering)
+    - [Enter the Collector](#enter-the-collector)
+      - [Into Other Collections](#into-other-collections)
+      - [To Values](#to-values)
+      - [Partitioning and Grouping the Data](#partitioning-and-grouping-the-data)
+      - [Strings](#strings)
+      - [Composing Collectors](#composing-collectors)
+    - [Collection Niceties](#collection-niceties)
+  - [Data Parallelism](#data-parallelism)
+    - [Parallelism Versus Concurrency](#parallelism-versus-concurrency)
+    - [Parallel Stream Operations](#parallel-stream-operations)
+    - [Simulation](#simulation)
+    - [Caveats](#caveats)
+    - [Performance](#performance)
+    - [Parallel Array Operations](#parallel-array-operations)
+  - [Sources](#sources)
+
 ## Lambda Expressions
 
 - A method without a name that is used to pass around behaviour as if it were data
@@ -269,8 +313,12 @@ long count = allArtists.stream()
   - _identity_ value: `0`
     - an identity for the accumulator function
     - for all `t`, `accumulator.apply(identity, t)` is equal to `t`
-  - _accumulator_ function:
-    - must be an associative function
+  - _accumulator_ function
+    - must be an _associative_ function
+      - order in which the function is applied doesn’t matter as long the values of the sequence aren't changed
+      - e.g., `+` and `*` are associative:
+        - `(4 + 2) + 1 = 4 + (2 + 1) = 7`
+        - `(4 * 2) * 1 = 4 * (2 * 1) = 8`
     - holds the current sum (partial result of the reduction)
     - passed in the current element in the `Stream`
 - equivalent imperative version:
@@ -475,6 +523,155 @@ for (Integer element : asList(1, 2, 3)) {
   - otherwise, replace the associated value with the results of the given remapping function, or remove if the result is null
   - this method may be of use when combining multiple mapped values for a key
 - See [`advancedcollections/CollectionNiceties.java`](/src/test/java/com/jashburn/javafeatures/java8/advancedcollections/CollectionNiceties.java)
+
+## Data Parallelism
+
+- The big shift from external to internal iteration
+  - made it easier to write simple and clean code
+  - don't have to manually control the iteration
+  - we express the what and, by changing a single method call, we can get a library to figure out the how
+
+### Parallelism Versus Concurrency
+
+- Concurrency arises when two tasks are making progress at overlapping time periods
+- Parallelism arises when two tasks are happening at literally the same time, such as on a multicore CPU
+- The goal of parallelism is to reduce the runtime of a specific task by breaking it down into smaller components and performing them in parallel
+- _Data parallelism_
+  - achieve parallelism by splitting up the data to be operated on and assigning a single processing unit to each chunk of data
+  - works really well when you want to perform the same operation on a lot of data
+  - the problem needs be decomposed in a way that will work on subsections of the data, and then the answers from each subsection can be composed at the end
+  - contrasted with _task parallelism_, in which each individual thread of execution can be doing a totally different task
+
+### Parallel Stream Operations
+
+- To make a `Stream` parallel:
+  - call `Stream`'s `parallel` method
+  - call `Collection`'s `parallelStream` method
+- Parallel speed-up can depend on:
+  - size of the input stream
+    - may be slower with small dataset, and faster with large dataset
+  - how you wrote your code
+  - how many cores are available
+
+### Simulation
+
+- The kinds of problems that parallel stream libraries excel at are those that involve simple operations processing a lot of data, such as simulations
+- _Monte Carlo_ simulations
+  - work by running the same simulation many times over with different random seeds on every run
+  - results of each run are recorded and aggregated in order to build up a comprehensive simulation
+- See: [`dataparallelism/Simulations.java`](/src/test/java/com/jashburn/javafeatures/java8/dataparallelism/Simulations.java)
+
+### Caveats
+
+- You can run existing code in parallel with little modification, but only if you've written idiomatic code
+- Idiomatic code:
+  - `reduce`
+    - _identity_ value for the accumulating function
+    - combining function must be _associative_
+    - see [`reduce`](#reduce)
+  - avoid trying to hold locks
+    - the streams framework deals with any necessary synchronisation itself
+
+### Performance
+
+- Factors that influence parallel streams performance
+  - _data size_
+    - overhead to decomposing the problem to be executed in parallel and merging the results
+    - parallelisation worthwhile only when there's enough data that execution of a streams pipeline takes a while
+  - _source data structure_
+    - each pipeline of operations operates on some initial data source, usually a collection
+    - ease splitting out subsections for different data sources
+  - _packing_
+    - primitives are faster to operate on than boxed values
+  - _number of cores_
+    - not worth going parallel with single core
+    - number of cores that are available to use at runtime
+      - other processes executing simultaneously
+      - thread affinity (forcing threads to execute on certain cores or CPUs)
+  - _cost per element_
+    - more time spent operating on each element in the stream, the better performance from going parallel
+- Helpful to understand how problems are decomposed and merged
+
+```java
+private int addIntegers(List<Integer> values) {
+    return values.parallelStream()
+        .mapToInt(i -> i)
+        .sum();
+}
+```
+
+- Parallel streams back onto the fork/join framework
+  - fork stage recursively splits up a problem
+  - each chunk is operated upon in parallel
+  - join stage merges the results back together
+
+```text
+           ┌─────────────────────────────────────────┐
+           │             Elements 1 .. N             │
+           ├───────────────────┬─────────────────────┤
+Fork       │ Elements 1 .. N/2 │  Elements N/2 .. N  │
+           ├────────┬──────────┼───────────┬─────────┤
+           │ 1..N/4 │ N/4..N/2 │ N/2..3N/4 │ 3N/4..N │
+           └────────┴──────────┴───────────┴─────────┘
+            mapToInt   mapToInt   mapToInt   mapToInt
+Leaf work      ↓           ↓          ↓          ↓
+                 ↘       ↙              ↘      ↙
+Join                sum                    sum
+                         ↘              ↙
+                               sum
+```
+
+- On a four-core machine:
+  1. data source is decomposed into four chunks of elements
+  2. perform leaf computation work in parallel on each thread
+     - involves mapping each `Integer` to an `int` and also summing a quarter of the values in each thread
+     - ideally, we want to spend as much of our time as possible in leaf computation work
+  3. merge the results
+     - `sum` operation
+     - might involve any kind of `reduce`, `collect`, or terminal operation
+- Nature of the initial source is extremely important
+  - the ease with which we can repeatedly split a data structure in half corresponds to how fast it can be operated upon
+  - main groups of data sources by performance characteristics:
+    - _good_
+      - `ArrayList`, an array, or `IntStream.range`
+      - support random access - can be split up arbitrarily with ease
+    - _okay_
+      - `HashSet` and `TreeSet`
+      - can't easily decompose with perfect amounts of balance, but most of the time it's possible to do so
+    - _bad_
+      - may take _`O(N)`_ time to decompose
+      - `LinkedList`
+      - `Streams.iterate` and `BufferedReader.lines` have unknown length at the beginning
+- 2 types of stream operations:
+  - _stateless_
+    - need to maintain no concept of state over the whole operation
+    - examples: `map`, `filter`, and `flatMap`
+  - _stateful_
+    - have the overhead and constraint of maintaining state
+    - examples: `sorted`, `distinct`, and `limit`
+- If you can get away with using stateless operations, then you will get better parallel performance
+
+### Parallel Array Operations
+
+- Parallel array operations that utilise lambda expressions outside of the streams framework
+  - data parallel operations
+  - located on the utility class `Arrays`
+  - `parallelSort`: sorts elements in parallel
+- `parallelSetAll`
+  - updates the values in an array using a lambda expression
+
+```java
+double[] values = new double[size];
+Arrays.parallelSetAll(values, i -> i);
+```
+
+- `parallelPrefix`
+  - calculates running totals of the values of an array given an arbitrary function
+  - useful for performing accumulation-type calculations over time series of data
+  - mutates an array, replacing each element with the sum of that element and its predecessors
+    - 'sum' can be any `BinaryOperator`
+      - side-effect-free, associative function
+  - see: [`dataparallelism/ParallelArray.java`](/src/test/java/com/jashburn/javafeatures/java8/dataparallelism/ParallelArray.java)
 
 ## Sources
 
