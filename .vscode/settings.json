@@ -4,12 +4,16 @@
         "advancedcollections",
         "bakai",
         "closeable",
+        "collectcollectorstolist",
+        "dataparallelism",
         "defaultmethods",
+        "functionalinterface",
         "javac",
         "nums",
         "println",
         "ringo",
         "spliterator",
+        "testingdebuggingrefactoring",
         "unboxing"
     ]
 }

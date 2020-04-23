@@ -71,5 +71,4 @@ public final class Album implements Performance {
         List<Artist> musicians = getMusicians().map(Artist::copy).collect(toList());
         return new Album(name, tracks, musicians);
     }
-
 }

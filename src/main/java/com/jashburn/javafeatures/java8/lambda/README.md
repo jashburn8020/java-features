@@ -44,6 +44,15 @@
     - [Caveats](#caveats)
     - [Performance](#performance)
     - [Parallel Array Operations](#parallel-array-operations)
+  - [Testing, Debugging, and Refactoring](#testing-debugging-and-refactoring)
+    - [Lambda Refactoring Candidates](#lambda-refactoring-candidates)
+      - [Querying, Operating, Pushing a Value Back into the Object](#querying-operating-pushing-a-value-back-into-the-object)
+      - [The Lonely Override](#the-lonely-override)
+      - [Behavioural Write Everything Twice](#behavioural-write-everything-twice)
+    - [Unit Testing Lambda Expressions](#unit-testing-lambda-expressions)
+    - [Using Lambda Expressions in Test Doubles](#using-lambda-expressions-in-test-doubles)
+    - [Logging and Printing](#logging-and-printing)
+    - [Midstream Breakpoints](#midstream-breakpoints)
   - [Sources](#sources)
 
 ## Lambda Expressions
@@ -672,6 +681,94 @@ Arrays.parallelSetAll(values, i -> i);
     - 'sum' can be any `BinaryOperator`
       - side-effect-free, associative function
   - see: [`dataparallelism/ParallelArray.java`](/src/test/java/com/jashburn/javafeatures/java8/dataparallelism/ParallelArray.java)
+
+## Testing, Debugging, and Refactoring
+
+### Lambda Refactoring Candidates
+
+#### Querying, Operating, Pushing a Value Back into the Object
+
+- If you find that your code is repeatedly querying and operating on an object, only to push a value back into that object at the end
+  - that code belongs in the class of the object that you're modifying
+
+```java
+if (logger.isDebugEnabled()) {
+    logger.debug("Look at this: " + expensiveOperation());
+}
+```
+
+- Refactored to:
+
+```java
+logger.debug(() -> "Look at this: " + expensiveOperation());
+```
+
+- Better object-oriented programming (OOP)
+  - a key OOP concept is to encapsulate local state
+  - `isDebugEnabled` exposes its state
+  - with the lambda-based approach, the code outside of the logger doesn't need to check the level at all
+
+#### The Lonely Override
+
+- You subclass solely to override a single method
+- Example: `ThreadLocal`
+  - allows us to create a factory that generates at most one value per thread
+  - to look up an artist from the database but want to do it once per thread:
+
+```java
+ThreadLocal<Album> thisAlbum = new ThreadLocal<Album> () {
+    @Override protected Album initialValue() {
+        return database.lookupCurrentAlbum();
+    }
+};
+```
+
+- Refactored to:
+
+```java
+ThreadLocal<Album> thisAlbum = ThreadLocal.withInitial(() -> database.lookupCurrentAlbum());
+```
+
+- Existing instance of `Supplier<Album>` can be reused and composed
+- Don't need to deal with subclassing boilerplate
+
+#### Behavioural Write Everything Twice
+
+- Write Everything Twice (WET) is the opposite of Don't Repeat Yourself (DRY)
+- Try adding lambdas where you want to perform a similar overall pattern but have a different behaviour from one variant to another
+- See [`testingdebuggingrefactoring/Order.java`](/src/test/java/com/jashburn/javafeatures/java8/testingdebuggingrefactoring/Order.java)
+
+### Unit Testing Lambda Expressions
+
+- View the lambda expression as a block of code within its surrounding method
+  - test the behaviour of the surrounding method, not the lambda expression itself
+- To test a complex lambda expression directly
+  - extract the lambda expression into a method
+    - refer to the method using method reference
+  - test the extracted method directly to cover edge cases
+- See: [`testingdebuggingrefactoring/TestingLambda.java`](/src/test/java/com/jashburn/javafeatures/java8/testingdebuggingrefactoring/TestingLambda.java)
+
+### Using Lambda Expressions in Test Doubles
+
+- One of the simplest ways to use lambda expressions in test code is to implement lightweight stubs
+  - really easy and natural to implement if the collaborator to be stubbed is already a functional interface
+- If you expect to pass a lambda expression into your code, then it's usually the right thing to have your test also pass in a lambda expression
+- See `testPassingInALambda()` in [`testingdebuggingrefactoring/Order.java`](/src/test/java/com/jashburn/javafeatures/java8/testingdebuggingrefactoring/Order.java)
+
+### Logging and Printing
+
+- Let's say you’re performing a series of operations on a collection and you're trying to debug the code
+  - you want to see what the result of an individual operation is
+  - printing out the collection value after each step is pretty hard with the Streams framework, as intermediate steps are lazily evaluated
+- `peek(Consumer) : Stream`
+  - look at each value in turn and also lets you continue to operate on the same underlying stream
+  - see: [`testingdebuggingrefactoring/LoggingAndPrinting.java`](/src/test/java/com/jashburn/javafeatures/java8/testingdebuggingrefactoring/LoggingAndPrinting.java)
+
+### Midstream Breakpoints
+
+- To allow us to debug a stream element by element, as we might debug a loop step by step, a breakpoint can be set on the body of the `peek` method
+- `peek` can just have an empty body that you set a breakpoint in
+- Some debuggers won't let you set a breakpoint in an empty body, in which case just map a value to itself in order to be able to set the breakpoint
 
 ## Sources
 
