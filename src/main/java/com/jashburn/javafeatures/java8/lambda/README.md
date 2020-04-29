@@ -53,6 +53,16 @@
     - [Using Lambda Expressions in Test Doubles](#using-lambda-expressions-in-test-doubles)
     - [Logging and Printing](#logging-and-printing)
     - [Midstream Breakpoints](#midstream-breakpoints)
+  - [Design and Architectural Principles](#design-and-architectural-principles)
+    - [Lambda-Enabled Design Patterns](#lambda-enabled-design-patterns)
+      - [Command Pattern](#command-pattern)
+      - [Strategy Pattern](#strategy-pattern)
+      - [Observer Pattern](#observer-pattern)
+      - [Template Method Pattern](#template-method-pattern)
+    - [Lambda-Enabled SOLID Principles](#lambda-enabled-solid-principles)
+      - [The Single Responsibility Principle](#the-single-responsibility-principle)
+      - [The Open/Closed Principle](#the-openclosed-principle)
+      - [The Dependency Inversion Principle](#the-dependency-inversion-principle)
   - [Sources](#sources)
 
 ## Lambda Expressions
@@ -769,6 +779,116 @@ ThreadLocal<Album> thisAlbum = ThreadLocal.withInitial(() -> database.lookupCurr
 - To allow us to debug a stream element by element, as we might debug a loop step by step, a breakpoint can be set on the body of the `peek` method
 - `peek` can just have an empty body that you set a breakpoint in
 - Some debuggers won't let you set a breakpoint in an empty body, in which case just map a value to itself in order to be able to set the breakpoint
+
+## Design and Architectural Principles
+
+### Lambda-Enabled Design Patterns
+
+#### Command Pattern
+
+- A command object is an object that encapsulates all the information required to call another method later
+- The command pattern is a way of using this object in order to write generic code that sequences and executes methods based on runtime decisions
+- 4 classes that take part in the command pattern:
+  1. **Receiver**: performs the actual work
+  2. **Command**: encapsulates all the information required to call the receiver
+  3. **Invoker**: controls the sequencing and execution of one or more commands
+  4. **Client**: creates concrete command instances
+- Example
+  - GUI `Editor` (receiver) component that has actions upon it that we'll be calling, such as `open` or `save` (commands)
+  - we want to implement macro functionality (invoker)
+    - a series of operations that can be recorded and then run later as a single operation
+  - see: [`designarchitecture/commandpattern`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/commandpattern)
+
+#### Strategy Pattern
+
+- The strategy pattern is a way of changing the algorithmic behaviour of software based upon a runtime decision
+- The main idea is to be able to define a common problem that is solved by different algorithms
+  - encapsulate all the algorithms behind the same programming interface
+- Classes that take part in the strategy pattern:
+  1. **Context**: maintains reference to one of the concrete strategies and communicates with this object via the strategy interface
+  2. **Strategy**: an interface common to all strategies; contains a method the context uses to execute a strategy
+  3. **Concrete Strategy**: implements variations of an algorithm the context uses
+  4. **Client**: creates a specific strategy and passes it to the context
+- Example
+  - users have the choice of compressing files using either the zip algorithm or gzip algorithm (concrete strategies)
+  - `CompressionStrategy`: API for strategies (strategy)
+  - a generic `Compressor` class that can compress using either algorithm (context)
+  - see: [`designarchitecture/strategypattern`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/strategypattern)
+
+#### Observer Pattern
+
+- In the observer pattern, an object, called the **subject**, maintains a list of other objects, which are its **observer**s
+- When the state of the subject changes, its observers are notified
+- Example:
+  - NASA and aliens (observers) want to observe (be notified of) landings on the moon (subject)
+  - see: [`designarchitecture/observerpattern`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/observerpattern)
+- Going down the lambda route depends a lot on the complexity of the observer code
+
+#### Template Method Pattern
+
+- The template method pattern is designed for situations where a common algorithm with a set of differing specifics
+  - you want implementations to have a common pattern in order to ensure that they're following the same algorithm
+- Overall algorithm design is represented by an **abstract class**
+  - has a series of abstract methods that represent customised steps in the algorithm
+  - any common code can be kept in this class
+- Each variant of the algorithm is implemented by a **concrete class**
+  - overrides the abstract methods and provides the relevant implementation
+- Example
+  - a bank gives out loans to members of the public, companies, and employees
+  - similar loan application process - check the identity, credit history, and income history
+  - obtain information from different sources
+    - e.g., check the identity of a person by looking at an existing bill, but companies have an official registrar
+  - employee loan application is just like a personal loan application but with no income history checking
+  - see: [`designarchitecture/templatemethodpattern`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/templatemethodpattern)
+
+### Lambda-Enabled SOLID Principles
+
+#### The Single Responsibility Principle
+
+- _Every class or method in your program should have only a single reason to change_
+- When the requirements of your software change, the responsibilities of the classes and methods that implement these requirements also change
+- If you have a class that has more than one responsibility
+  - when a responsibility changes, the resulting code changes can affect the other responsibilities that the class possesses
+- A class should not just have a single responsibility; it should also encapsulate it
+- Lambda expressions make it a lot easier to implement the single responsibility principle at the method level
+- See: [`designarchitecture/singleresponsibilityprinciple/CountPrimes.java`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/singleresponsibilityprinciple/CountPrimes.java)
+
+#### The Open/Closed Principle
+
+- _Software entities should be open for extension, but closed for modification_
+- The open/closed principle is an effort to ensure that existing classes can be extended without their internal implementation being modified
+  - to avoid changes rippling through the code base in a way that is likely to introduce new bugs
+  - rely on an abstraction, and plug in new functionality that fits into this abstraction
+- Example: Program that measures information about system performance and graphs the results of these measurements
+  - `MetricDataGraph`: the class that has the responsibility for displaying metrics
+  - see: [`designarchitecture/openclosedprinciple/MetricDataGraph.java`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/openclosedprinciple/MetricDataGraph.java)
+- Higher-order function: a function that takes a function as parameter, or returns a function after its execution
+  - open for extension despite being closed for modification
+  - example: `ThreadLocal` class
+    - see: [`designarchitecture/openclosedprinciple/ThreadLocalOpenClosed.java`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/openclosedprinciple/ThreadLocalOpenClosed.java)
+- Immutable objects implement the open/closed principle
+  - because their internal state can't be modified, it's safe to add new methods to them
+  - the new methods can't alter the internal state of the object, so they are closed for modification
+    - but they are adding behaviour, so they are open to extension
+  - they are inherently thread-safe
+    - there is no internal state to mutate, so they can be shared between different threads
+
+#### The Dependency Inversion Principle
+
+- _Abstractions should not depend on details; details should depend on abstractions_
+- Many of the higher-order functions, such as `map`, enable dependency inversion
+  - allows us to reuse code for the general concept of transforming a stream of values between different specific transformations
+  - doesn't depend upon the details of any of these specific transformations, but upon an abstraction - the functional interface `Function`
+- A more complex example of dependency inversion is resource management
+  - example: extract headings from a hypothetical markup language
+    - each heading is designated by being suffixed with a colon (`:`)
+    - the method is going to extract the headings from a file by
+      - reading the file
+      - looking at each of the lines in turn
+      - filtering out the headings
+      - closing the file
+    - wrap any `Exception` related to the file I/O into a domain exception called a `HeadingLookupException`
+    - see: [`designarchitecture/dependencyinversionprinciple/HeadingsExtractor.java`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/dependencyinversionprinciple/HeadingsExtractor.java)
 
 ## Sources
 
