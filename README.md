@@ -2,7 +2,7 @@
 
 - Java 8
   - [General](src/main/java/com/jashburn/javafeatures/java8/general)
-  - [Lambda](src/main/java/com/jashburn/javafeatures/java8/lambda)
+  - [Lambdas](src/main/java/com/jashburn/javafeatures/java8/lambdas)
 - Java 9
 - Java 10
 - Java 11
