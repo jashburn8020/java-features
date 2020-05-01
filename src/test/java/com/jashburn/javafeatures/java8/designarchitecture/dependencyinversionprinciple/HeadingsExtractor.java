@@ -54,6 +54,7 @@ class HeadingsExtractor {
             throw error.apply(e);
         }
     }
+}
 
 class HeadingLookupException extends RuntimeException {
 

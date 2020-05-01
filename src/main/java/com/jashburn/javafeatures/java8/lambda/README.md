@@ -63,6 +63,13 @@
       - [The Single Responsibility Principle](#the-single-responsibility-principle)
       - [The Open/Closed Principle](#the-openclosed-principle)
       - [The Dependency Inversion Principle](#the-dependency-inversion-principle)
+  - [Lambda-Enabled Concurrency](#lambda-enabled-concurrency)
+    - [Why Use Nonblocking I/O](#why-use-nonblocking-io)
+    - [Message Passing Architectures](#message-passing-architectures)
+    - [The Pyramid of Doom](#the-pyramid-of-doom)
+    - [Futures](#futures)
+    - [Completable Futures](#completable-futures)
+    - [When and Where](#when-and-where)
   - [Sources](#sources)
 
 ## Lambda Expressions
@@ -889,6 +896,116 @@ ThreadLocal<Album> thisAlbum = ThreadLocal.withInitial(() -> database.lookupCurr
       - closing the file
     - wrap any `Exception` related to the file I/O into a domain exception called a `HeadingLookupException`
     - see: [`designarchitecture/dependencyinversionprinciple/HeadingsExtractor.java`](/src/test/java/com/jashburn/javafeatures/java8/designarchitecture/dependencyinversionprinciple/HeadingsExtractor.java)
+
+## Lambda-Enabled Concurrency
+
+### Why Use Nonblocking I/O
+
+- Nonblocking I/O
+  - sometimes called asynchronous I/O
+  - can be used to process many concurrent network connections without having an individual thread service each connection
+  - the methods to read and write data to your clients return immediately
+  - the actual I/O processing happens in a separate thread, and you are free to perform some useful work in the meantime
+- The Java standard library presents a nonblocking I/O API in the form of NIO (New I/O)
+  - the original version of NIO uses the concept of a `Selector`
+    - lets a thread manage multiple channels of communication, such as the network socket that's used to write to your client
+  - this approach never proved particularly popular with Java developers and resulted in code that was fairly hard to understand and debug
+  - with the introduction of lambda expressions, it becomes idiomatic to design and develop APIs that don't have these deficiencies
+
+### Message Passing Architectures
+
+- No-shared-state design
+  - all communication between components is done by sending messages over a bus
+  - don't need to protect any shared state
+  - don't need any kind of locks or use of the `synchronized` keyword in our code base
+  - concurrency is much simpler
+- To ensure that we aren't sharing any state between components
+  - impose a few constraints on the types of messages being sent
+  - immutable, e.g., strings
+  - the receiving handler can't modify the state of the `String`, it can't interfere with the behaviour of the sender
+  - if messages are mutable
+    - copy mutable message the moment you send it
+- Message passing and reactive programming
+  - for concurrency situations in which we want to have many more units of I/O work, such as connected clients, than we have threads running in parallel
+  - use lambda expressions to represent the behaviour, and build APIs that manage the concurrency for you
+
+### The Pyramid of Doom
+
+- We can use callbacks and events to produce nonblocking concurrent code
+- If you write code with lots of callbacks, it becomes very hard to read, even with lambda expressions
+  - nested callbacks can turn into a _pyramid of doom_
+
+### Futures
+
+- Another option when trying to build up complex sequences of concurrent operations is to use a `Future`
+  - an IOU for a value
+- Instead of a method returning a value, it returns the `Future`
+  - doesn't have the value when it's first created
+  - extract the value of the Future by calling its `get` method
+    - blocks until the value is ready
+- Unfortunately, `Future`s end up with composability issues, just like callbacks
+- Example:
+
+```java
+@Override
+public Album lookupByName(String albumName) {
+    Future<Credentials> trackLogin = loginTo("track"); // (i)
+    Future<Credentials> artistLogin = loginTo("artist");
+
+    try {
+        Future<List<Track>> tracks = lookupTracks(albumName, trackLogin.get()); // (ii)
+        Future<List<Artist>> artists = lookupArtists(albumName, artistLogin.get());
+
+        return new Album(albumName, tracks.get(), artists.get()); // (iii)
+    } catch (InterruptedException | ExecutionException e) {
+        throw new AlbumLookupException(e.getCause());
+    }
+}
+```
+
+- Example (code explanation):
+  1. start by logging into the track and artist services
+  2. make calls to look up the tracks and artists given the login credentials, and call `get` on both of these login credentials in order to get them out of the `Future`s
+  3. build up our new `Album` to return, again calling `get` in order to block on the existing `Future`s
+- Example (problem):
+  - if you want to pass the result of one `Future` into the beginning of another piece of work, you end up blocking the thread of execution
+    - performance limitation because instead of work being executed in parallel, it is (accidentally) run in serial
+    - we can't start either of the calls to the lookup services until we've logged into both of them
+  - we could drag the blocking `get` calls into the execution body of `lookupTracks` and `lookupArtists`
+    - would solve the problem, but would also result in uglier code, and an inability to reuse credentials between multiple calls
+- What we really want is a way of acting on the result of a `Future`, without having to make a blocking `get` call
+  - combine a `Future` with a callback
+
+### Completable Futures
+
+- `CompletableFuture` combines the IOU idea of a `Future` with using callbacks to handle event-driven work
+  - can compose different instances in a way that doesn't result in the pyramid of doom
+    - various other languages call them a _deferred object_ or a _promise_
+    - in the Google Guava Library and the Spring Framework these are referred to as `ListenableFuture`s
+- Example:
+  - `loginTo`, `lookupArtists`, and `lookupTracks` all return a `CompletableFuture` instead of a `Future`
+  - key "trick" to the `CompletableFuture` API is to register lambda expressions and chain higher-order functions
+  - see: [`lambdaconcurrency/CompletableFuturesDemo.java`](/src/test/java/com/jashburn/javafeatures/java8/lambdaconcurrency/CompletableFuturesDemo.java)
+- Use cases:
+  - if you want to end your chain with a block of code that returns nothing, such as a `Consumer` or `Runnable`, then take a look at `thenAccept` and `thenRun`
+  - transforming the value of the `CompletableFuture`, a bit like using the `map` method on `Stream`, can be achieved using `thenApply`
+  - if you want to convert situations in which your `CompletableFuture` has completed with an exception, the `exceptionally` method allows you to recover by registering a function to make an alternative value
+  - if you need to do a `map` that takes account of both the exceptional case and regular use cases, use `handle`
+  - when trying to figure out what is happening with your `CompletableFuture`, you can use the `isDone` and `isCompletedExceptionally` methods
+
+### When and Where
+
+- There are two scenarios in particular in which you might want to think in terms of reacting to events rather than blocking
+  1. when your business domain is phrased in terms of events
+     - example: Twitter
+       - a service for subscribing to streams of text messages
+       - users send messages between one another
+       - by making your application event-driven, you are accurately modelling the business domain
+     - example: an application that tries to plot the price of shares
+       - each new price update can be modelled as an event
+  2. where your application needs to perform many I/O operations simultaneously
+     - performing blocking I/O requires too many threads to be spawned simultaneously
+     - results in too many locks in contention and too much context switching
 
 ## Sources
 
